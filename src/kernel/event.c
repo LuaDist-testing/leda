@@ -831,7 +831,14 @@ void event_aio_op_ready(evutil_socket_t afd, short libev_event, void *arg) {
   
 static THREAD_RETURN_T THREAD_CALLCONV event_main(void *t_val) {
    int process_fd=*(int*)t_val;
-   free(t_val);
+
+   int i;
+   sockets=calloc(main_graph->n_d,sizeof(queue));
+   for(i=0;i<main_graph->n_d;i++) sockets[i]=queue_new();
+   cur_process=calloc(main_graph->n_cl,sizeof(atomic));
+   for(i=0;i<main_graph->n_cl;i++) cur_process[i]=atomic_new(0);
+
+  // free(t_val);
 
    struct event *listener_event;
 
@@ -852,8 +859,13 @@ static THREAD_RETURN_T THREAD_CALLCONV event_main(void *t_val) {
    listener_event = event_new(base, process_fd, EV_READ|EV_PERSIST, do_accept, base);
    event_add(listener_event, NULL);
    event_base_dispatch(base);
+   
+   for(i=0;i<main_graph->n_d;i++) queue_free(sockets[i]);
+   for(i=0;i<main_graph->n_cl;i++) atomic_free(cur_process[i]);
+
 	return NULL;
 }
+
 
 void event_wait_io(instance i) {
    int fd=-1;
@@ -983,11 +995,11 @@ void leda_event_end_t() {
 void event_init_t(int process_fd) {
    int *p=malloc(sizeof(int));
    *p=process_fd;
-   int i;
-   sockets=calloc(main_graph->n_d,sizeof(queue));
-   for(i=0;i<main_graph->n_d;i++) sockets[i]=queue_new();
-   cur_process=calloc(main_graph->n_cl,sizeof(atomic));
-   for(i=0;i<main_graph->n_cl;i++) cur_process[i]=atomic_new(0);
 
    THREAD_CREATE( &event_thread, event_main, p, 0 );
 }
+
+//void leda_event_end() {
+//	event_base_loopexit(base,NULL);
+//}
+

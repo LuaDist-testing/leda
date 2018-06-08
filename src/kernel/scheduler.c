@@ -39,7 +39,6 @@ THE SOFTWARE.
 
 MUTEX_T debug_lock;
 atomic pool_size;
-extern queue ready_queue;
 
 /* Thread subsystem internal functions */
 void emmit_cohort(instance caller);
@@ -47,15 +46,16 @@ void emmit_self(instance i);
 void emmit_remote(instance i);
 
 /* Returns the current size of the ready queue */
-bool_t thread_ready_queue_isempty() {
-   return queue_isempty(ready_queue);
-}
 
 /* Initialize thread subsystem */
-void thread_init(size_t ready_queue_capacity) {
-   ready_queue=queue_new();
-   queue_set_capacity(ready_queue,ready_queue_capacity);
+void leda_thread_init() {
    pool_size=atomic_new(0);
+}
+
+void leda_thread_end() {
+//   if(READ(pool_size)!=0)
+	//TODO kill all remaining threads
+   	
 }
 
 #ifdef DEBUG
@@ -114,8 +114,6 @@ char const * get_return_status_name(int status) {
    return "UNKNOWN";
 }
 
-   
-
 /* Call an instance loaded with 'args' values at the top of its stack */
 void thread_resume_instance(instance i) {
    _DEBUG("Thread: CALLING STAGE '%s' instance=%d args=%d\n",
@@ -132,7 +130,7 @@ void thread_resume_instance(instance i) {
    int status=0;
    if(lua_pcall(i->L,i->args,LUA_MULTRET,0)) {
       const char * err=lua_tostring(i->L,-1);
-      fprintf(stderr,"Error resuming instance: %s\n",err);
+      fprintf(stderr,"Error resuming instance (%s): %s\n",main_graph->s[i->stage]->name,err);
       status=PCALL_ERROR;
    } else {   
       if(lua_isnumber(i->L, 1)) status=lua_tointeger(i->L,1);
@@ -502,7 +500,7 @@ int cohort(lua_State * L) {
    return lua_yield(L,args);
 }
 
-#define wait_ready_queue(i) POP(ready_queue,i)
+#define wait_ready_queue(i) POP(leda_get_ready_queue(),i)
 
 /*thread main loop*/
 static THREAD_RETURN_T THREAD_CALLCONV thread_main(void *t_val) {
@@ -551,9 +549,8 @@ int thread_rawkill (lua_State *L) {
    return 0;
 }
 
-#ifdef PLATFORM_LINUX
 static int leda_thread_set_affinity(lua_State * L) {
-
+#ifdef PLATFORM_LINUX
 	thread t = luaL_checkudata (L, 1, THREAD_METATABLE);
 	int core_id=lua_tointeger(L,2)-1;
 
@@ -563,13 +560,10 @@ static int leda_thread_set_affinity(lua_State * L) {
 
    lua_pushinteger(L,pthread_setaffinity_np(t->thread, sizeof(cpu_set_t), &cpuset));
    return 1;
-}
-
 #else
-static int leda_thread_set_affinity(lua_State * L) {
  	return luaL_error(L,"Not implemented");
-}
 #endif
+}
 
 
 /* Kill a thread from Lua*/
@@ -651,6 +645,7 @@ int thread_gc (lua_State *L) {
 int thread_createmetatable (lua_State *L) {
 	/* Create thread metatable */
 	if (!luaL_newmetatable (L, THREAD_METATABLE)) {
+		lua_pop(L,1);
 		return 0;
 	}
 	/* load methods onto the newly created metatable */

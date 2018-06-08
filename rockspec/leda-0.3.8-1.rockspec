@@ -1,18 +1,10 @@
--- This file was automatically generated for the LuaDist project.
-
 package = "leda"
-version = "0.3.7-1"
+version = "0.3.8-1"
 
--- LuaDist source
 source = {
-  tag = "0.3.7-1",
-  url = "git://github.com/LuaDist-testing/leda.git"
+	url= "https://github.com/salmito/leda/archive/v0.3.8.zip",
+	dir= "leda-0.3.8"
 }
--- Original source
--- source = {
--- 	url= "https://github.com/salmito/leda/archive/v0.3.7.zip",
--- 	dir= "leda-0.3.7"
--- }
 
 description = {
    summary = "Leda",

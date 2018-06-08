@@ -74,12 +74,6 @@ char has_error_cb=0,
 
 bool_t initialized=FALSE;
 
-extern queue ready_queue;
-extern queue * event_queues;
-extern queue * recycle_queues;
-
-
-
 static int leda_send(lua_State *L) {
    int i,id=lua_tointeger(L,1),args=lua_gettop(L)-1;
    if(id<0 || id>main_graph->n_s) {
@@ -107,6 +101,7 @@ static int L_main_args;
 void kernel_yield_event(evutil_socket_t fd, short events, void *arg) {
 	event e=arg;
 	L_main_args=restore_event_to_lua_state(L_main, &e);
+	_DEBUG("Kernel: Exit event\n");
 	event_base_loopexit(kernel_event_base,NULL);
 }
 
@@ -226,18 +221,16 @@ static int add_timer(lua_State * L) {
 *          'nil' in case of error, with an error message
 */
 static int leda_run(lua_State * L) {
-   //#ifdef PLATFORM_LINUX
-   evthread_use_pthreads();
-   //#endif
    kernel_event_base = event_base_new();
    if (!kernel_event_base) {
    	luaL_error(L,"Error opening a new event_base for the kernel"); //error
    }
-   
+
    //Create graph internal representation
    graph g=to_graph(L,2);
    
    main_graph=g;
+   leda_thread_init();
    //parameter must be a table for controller
    luaL_checktype(L,3, LUA_TTABLE);
    int default_maxpar=lua_tointeger(L,4);
@@ -358,13 +351,16 @@ static int leda_run(lua_State * L) {
    
    struct event *listener_event = event_new(kernel_event_base, -1, EV_READ|EV_PERSIST, kernel_null_event, NULL);
    event_add(listener_event, NULL);
-    
+   
    event_base_dispatch(kernel_event_base);
+   _DEBUG("Kernel: Exited dispatch\n");
+
    #else
       while(1) sleep(1000);
    #endif
    
     //call the finish function of a controller, if defined
+   _DEBUG("Kernel: Exited finish\n");
    lua_getfield(L, 3,"finish");
    if(lua_type(L,-1)==LUA_TFUNCTION) {
       _DEBUG("Kernel: Calling controller finish function\n");
@@ -374,26 +370,24 @@ static int leda_run(lua_State * L) {
       lua_pop(L,1);
       _DEBUG("Controller does not defined an finish method\n");
    }
+      #if defined(PLATFORM_WIN32)
+	Sleep(100);
+   #endif
+   _DEBUG("Kernel: Called finish\n");
+   #ifndef STATS_OFF
+	   stats_free();
+   #endif
+   
+   instance_end();
+   leda_thread_end();
+//   leda_event_end();
+    
    leda_event_end_t();
+
    close(process_fd);
    event_base_free(kernel_event_base);
+   _DEBUG("Kernel: Exiting RUN\n");
    return  L_main_args;
-}
-
-/* Kernel Lua function to get the size of the ready queue*/
-static int leda_ready_queue_size(lua_State * L) {
-   lua_pushinteger(L,queue_size(ready_queue));
-   return 1;
-}
-
-static int leda_ready_queue_capacity(lua_State * L) {
-   lua_pushinteger(L,queue_capacity(ready_queue));
-   return 1;
-}
-
-static int leda_ready_queue_isempty(lua_State * L) {
-   lua_pushboolean(L,queue_isempty(ready_queue));
-   return 1;
 }
 
 int leda_getmetatable(lua_State *L) {
@@ -520,29 +514,6 @@ static int leda_default_hostname(lua_State * L) {
 /* Get the size of the thread pool */
 static int leda_get_thread_pool_size(lua_State * L) {
    lua_pushinteger(L,READ(pool_size));
-   return 1;
-}
-
-static int leda_set_capacity(lua_State * L) {
-   queue q=NULL;
-   int i=lua_tointeger(L,1);
-   if(i<0) {
-      q=ready_queue;
-   } else if(i>=main_graph->n_s) {
-         lua_pushnil(L);
-         lua_pushliteral(L,"Invalid stage id");
-         return 2;
-   } else {
-      q=event_queues[i];
-   }
-   if(!q) {
-      lua_pushnil(L);
-      lua_pushliteral(L,"Queue error");
-      return 2;
-   }
-   int cap=lua_tointeger(L,2);
-   queue_set_capacity(q,cap);
-   lua_pushboolean(L,1);
    return 1;
 }
 
@@ -707,15 +678,11 @@ int luaopen_leda_kernel (lua_State *L) {
 	};
 	
    /* Initialize some debug related variables and the thread subsystem */
-   if(initialized) {
-   	lua_getglobal(L,"leda");
-   	return 1;
+   if(!initialized) {
+		evthread_use_pthreads();
    }
+
    initialized=TRUE;
-   #ifdef DEBUG
-//   MUTEX_INIT(&debug_lock);
-   #endif
-   thread_init(-1);
 	
 	/* Load main library functions */
    _DEBUG("Kernel: Loading leda main API\n");
