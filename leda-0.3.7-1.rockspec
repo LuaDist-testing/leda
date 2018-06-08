@@ -1,17 +1,17 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "leda"
-version = "0.3.5-1"
+version = "0.3.7-1"
 
 -- LuaDist source
 source = {
-  tag = "0.3.5-1",
+  tag = "0.3.7-1",
   url = "git://github.com/LuaDist-testing/leda.git"
 }
 -- Original source
 -- source = {
--- 	url= "https://github.com/salmito/leda/archive/v0.3.5.zip",
--- 	dir= "leda-0.3.5"
+-- 	url= "https://github.com/salmito/leda/archive/v0.3.7.zip",
+-- 	dir= "leda-0.3.7"
 -- }
 
 description = {
